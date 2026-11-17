@@ -80,6 +80,9 @@ function handle_(req) {
         return saveSchedule_(ss, req.schedule);
       });
 
+    case 'debug':
+      return debug_(ss);
+
     default:
       throw new Error('不明な操作です');
   }
@@ -102,19 +105,32 @@ function checkMonth_(month) {
   return month;
 }
 
-// シートが日付に変えてしまっていた場合も「2026-12」の形に戻す
+// シートが「2026-12」を日付に変えてしまっていても、「2026-12」の形に戻す
+// (2026-12 / 2026/12/01 / 2026年12月 / 12/1/2026 のどれでも読める)
 function monthText_(value) {
-  if (value instanceof Date) {
-    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM');
+  var text = String(value);
+  var m = text.match(/(\d{4})\D+(\d{1,2})/);
+  if (!m) {
+    var us = text.match(/(\d{1,2})\D+\d{1,2}\D+(\d{4})/);
+    if (us) m = [null, us[2], us[1]];
   }
-  return String(value);
+  if (!m) return text;
+  return m[1] + '-' + (m[2].length === 1 ? '0' + m[2] : m[2]);
+}
+
+// 1行ぶんを「文字列」として書き込む(日付や数値に勝手に変換させない)
+function writeRow_(sheet, rowNumber, values) {
+  if (rowNumber > sheet.getMaxRows()) sheet.insertRowAfter(sheet.getMaxRows());
+  var range = sheet.getRange(rowNumber, 1, 1, values.length);
+  range.setNumberFormat('@');
+  range.setValues([values]);
 }
 
 function getStaff_(ss) {
   return ss
     .getSheetByName(SHEET.staff)
     .getDataRange()
-    .getValues()
+    .getDisplayValues()
     .slice(1)
     .map(function (row) {
       return String(row[0]).trim();
@@ -144,23 +160,46 @@ function rowToSubmission_(row) {
 }
 
 function findSubmission_(ss, month, name) {
-  var rows = ss.getSheetByName(SHEET.submissions).getDataRange().getValues();
-  for (var i = 1; i < rows.length; i++) {
+  var rows = ss.getSheetByName(SHEET.submissions).getDataRange().getDisplayValues();
+  for (var i = rows.length - 1; i >= 1; i--) {
     if (monthText_(rows[i][0]) === month && String(rows[i][1]) === name) return rowToSubmission_(rows[i]);
   }
   return null;
 }
 
 function listSubmissions_(ss, month) {
-  return ss
-    .getSheetByName(SHEET.submissions)
+  // 同じ人の行が複数あるときは、いちばん下(新しい方)だけを残す
+  var byName = {};
+  ss.getSheetByName(SHEET.submissions)
     .getDataRange()
-    .getValues()
+    .getDisplayValues()
     .slice(1)
-    .filter(function (row) {
-      return monthText_(row[0]) === month;
-    })
-    .map(rowToSubmission_);
+    .forEach(function (row) {
+      if (monthText_(row[0]) === month) byName[String(row[1])] = rowToSubmission_(row);
+    });
+  return Object.keys(byName).map(function (name) {
+    return byName[name];
+  });
+}
+
+// 不具合調査用:各シートの先頭数行が、そのまま/表示上どう入っているかを返す
+function debug_(ss) {
+  var out = {};
+  [SHEET.submissions, SHEET.schedules].forEach(function (name) {
+    var range = ss.getSheetByName(name).getDataRange();
+    var raw = range.getValues().slice(0, 6);
+    var shown = range.getDisplayValues().slice(0, 6);
+    out[name] = raw.map(function (row, i) {
+      return {
+        monthRaw: String(row[0]),
+        monthType: Object.prototype.toString.call(row[0]),
+        monthShown: shown[i][0],
+        monthRead: monthText_(shown[i][0]),
+      };
+    });
+  });
+  out.timeZone = { script: Session.getScriptTimeZone(), sheet: ss.getSpreadsheetTimeZone() };
+  return out;
 }
 
 function saveSubmission_(ss, sub) {
@@ -187,21 +226,21 @@ function saveSubmission_(ss, sub) {
   var values = [month, name, JSON.stringify(days), readable, comment, updatedAt];
 
   var sheet = ss.getSheetByName(SHEET.submissions);
-  var rows = sheet.getDataRange().getValues();
-  for (var i = 1; i < rows.length; i++) {
+  var rows = sheet.getDataRange().getDisplayValues();
+  for (var i = rows.length - 1; i >= 1; i--) {
     if (monthText_(rows[i][0]) === month && String(rows[i][1]) === name) {
-      sheet.getRange(i + 1, 1, 1, values.length).setValues([values]);
+      writeRow_(sheet, i + 1, values);
       return rowToSubmission_(values);
     }
   }
-  sheet.appendRow(values);
+  writeRow_(sheet, sheet.getLastRow() + 1, values);
   return rowToSubmission_(values);
 }
 
 // ---------- 確定シフト ----------
 function getSchedule_(ss, month) {
-  var rows = ss.getSheetByName(SHEET.schedules).getDataRange().getValues();
-  for (var i = 1; i < rows.length; i++) {
+  var rows = ss.getSheetByName(SHEET.schedules).getDataRange().getDisplayValues();
+  for (var i = rows.length - 1; i >= 1; i--) {
     if (monthText_(rows[i][0]) !== month) continue;
     var schedule = parseJson_(rows[i][1], null);
     if (!schedule) return null;
@@ -223,16 +262,16 @@ function saveSchedule_(ss, input) {
   var values = [month, JSON.stringify(schedule), schedule.published ? '公開中' : '作成中', updatedAt];
 
   var sheet = ss.getSheetByName(SHEET.schedules);
-  var rows = sheet.getDataRange().getValues();
+  var rows = sheet.getDataRange().getDisplayValues();
   var written = false;
-  for (var i = 1; i < rows.length; i++) {
+  for (var i = rows.length - 1; i >= 1; i--) {
     if (monthText_(rows[i][0]) === month) {
-      sheet.getRange(i + 1, 1, 1, values.length).setValues([values]);
+      writeRow_(sheet, i + 1, values);
       written = true;
       break;
     }
   }
-  if (!written) sheet.appendRow(values);
+  if (!written) writeRow_(sheet, sheet.getLastRow() + 1, values);
   schedule.updatedAt = updatedAt;
   return schedule;
 }
