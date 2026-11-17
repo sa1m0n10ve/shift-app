@@ -26,7 +26,6 @@
       if (state.name) localStorage.setItem(NAME_KEY, state.name);
       render();
     });
-    $('onlyMine').addEventListener('change', render);
     $('prevMonth').addEventListener('click', () => moveMonth(-1));
     $('nextMonth').addEventListener('click', () => moveMonth(1));
 
@@ -73,50 +72,46 @@
     if (!isPublished()) return;
 
     const assign = state.schedule.assign || {};
-    const onlyMine = $('onlyMine').checked && state.name;
     const today = new Date();
-    const list = $('shiftList');
-    list.innerHTML = '';
+    const cal = $('shiftCal');
+    cal.innerHTML = '';
     const mine = { early: 0, late: 0 };
+    const first = new Date(state.year, state.month, 1).getDay();
     const last = new Date(state.year, state.month + 1, 0).getDate();
+    for (let i = 0; i < first; i++) cal.appendChild(el('div', 'cal-cell blank'));
 
     for (let d = 1; d <= last; d++) {
       const key = monthKey() + '-' + pad(d);
       const a = assign[key] || { early: [], late: [] };
       const closed = isClosedDay(state.year, state.month, d);
-      const mySlot = closed ? null : SLOTS.find((slot) => a[slot].includes(state.name)) || null;
-      if (mySlot) mine[mySlot]++;
-      if (onlyMine && !mySlot) continue;
-
       const dow = new Date(state.year, state.month, d).getDay();
-      const row = el('div', 'shift-row' + (closed ? ' closed' : '') + (mySlot ? ' mine' : ''));
+      const cell = el('div', 'cal-cell' + (closed ? ' closed' : '') + (dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''));
       if (today.getFullYear() === state.year && today.getMonth() === state.month && today.getDate() === d) {
-        row.classList.add('today');
+        cell.classList.add('today');
       }
-      const date = el('div', 'day-date' + (dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''));
-      date.appendChild(el('span', 'day-num', String(d)));
-      date.appendChild(el('span', 'day-dow', WEEK[dow]));
-      row.appendChild(date);
-
-      const body = el('div', 'shift-body');
+      cell.appendChild(el('span', 'cal-num', String(d)));
+      const labels = [];
       if (closed) {
-        body.appendChild(el('span', 'day-empty', '店休日'));
+        cell.appendChild(el('span', 'cal-closed', '休'));
+        labels.push('店休日');
       } else {
+        // 1人ずつ「新太郎早番」の形で縦に並べる(早番が上、遅番が下)
         SLOTS.forEach((slot) => {
-          const line = el('div', 'shift-line');
-          line.appendChild(el('span', 'chip ' + slot, SHIFT_TYPES[slot].short));
-          if (a[slot].length === 0) {
-            line.appendChild(el('span', 'day-empty', '未定'));
-          } else {
-            a[slot].forEach((name) => line.appendChild(el('span', 'shift-name' + (name === state.name ? ' me' : ''), name)));
-          }
-          body.appendChild(line);
+          a[slot].forEach((name) => {
+            const isMe = name === state.name;
+            if (isMe) mine[slot]++;
+            const entry = el('div', 'cal-entry ' + slot + (isMe ? ' me' : ''));
+            entry.appendChild(el('span', null, name));
+            entry.appendChild(el('span', null, SHIFT_TYPES[slot].label));
+            cell.appendChild(entry);
+            labels.push(name + SHIFT_TYPES[slot].label);
+          });
         });
+        if (labels.length === 0) labels.push('未定');
       }
-      row.appendChild(body);
-      list.appendChild(row);
+      cell.setAttribute('aria-label', state.month + 1 + '月' + d + '日 ' + labels.join(' '));
+      cal.appendChild(cell);
     }
-    if (list.children.length === 0) list.appendChild(el('p', 'day-empty', 'この月に入る日はありません。'));
 
     const summary = $('mySummary');
     summary.hidden = !state.name;
@@ -126,7 +121,6 @@
       summary.appendChild(el('strong', null, mine.early + mine.late + '日'));
       summary.appendChild(document.createTextNode('(早番 ' + mine.early + '・遅番 ' + mine.late + ')'));
     }
-    $('onlyMine').disabled = !state.name;
 
     const t = new Date(state.schedule.updatedAt);
     $('updated').textContent = '最終更新:' + (t.getMonth() + 1) + '/' + t.getDate() + ' ' + pad(t.getHours()) + ':' + pad(t.getMinutes());

@@ -36,11 +36,13 @@
           <option value="">全員を表示</option>
         </select>
         <p id="mySummary" class="summary" hidden></p>
-        <label class="check"><input id="onlyMine" type="checkbox"> 自分が入る日だけ表示</label>
       </section>
 
-      <section class="card">
-        <div id="shiftList" class="shift-list"></div>
+      <section class="card cal-card">
+        <div class="weekdays" aria-hidden="true">
+          <span class="sun">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span class="sat">土</span>
+        </div>
+        <div id="shiftCal" class="shift-cal"></div>
         <p id="updated" class="updated"></p>
       </section>
     </div>
