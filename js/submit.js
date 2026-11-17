@@ -1,0 +1,232 @@
+// シフト提出画面
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const NAME_KEY = 'shiftapp:name';
+
+  const state = {
+    name: '',
+    year: 0,
+    month: 0, // 0-11
+    days: {}, // { '2026-12-01': 'early' | 'late' | 'any' }
+    savedAt: null,
+    dirty: false,
+  };
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const monthKey = () => state.year + '-' + pad(state.month + 1);
+  const dateKey = (d) => monthKey() + '-' + pad(d);
+
+  function init() {
+    // 提出対象は来月
+    const now = new Date();
+    const target = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    state.year = target.getFullYear();
+    state.month = target.getMonth();
+
+    const select = $('nameSelect');
+    CONFIG.STAFF.forEach((n) => select.add(new Option(n, n)));
+    const remembered = localStorage.getItem(NAME_KEY);
+    if (remembered && CONFIG.STAFF.includes(remembered)) {
+      select.value = remembered;
+      state.name = remembered;
+    }
+
+    $('localNote').hidden = !Api.isLocal;
+
+    select.addEventListener('change', () => {
+      if (!confirmDiscard()) {
+        select.value = state.name;
+        return;
+      }
+      state.name = select.value;
+      localStorage.setItem(NAME_KEY, state.name);
+      load();
+    });
+    $('prevMonth').addEventListener('click', () => moveMonth(-1));
+    $('nextMonth').addEventListener('click', () => moveMonth(1));
+    $('comment').addEventListener('input', markDirty);
+    $('submitBtn').addEventListener('click', submit);
+    window.addEventListener('beforeunload', (e) => {
+      if (state.dirty) e.preventDefault();
+    });
+
+    load();
+  }
+
+  function confirmDiscard() {
+    return !state.dirty || confirm('まだ提出していない変更があります。破棄してよいですか?');
+  }
+
+  function moveMonth(diff) {
+    if (!confirmDiscard()) return;
+    const d = new Date(state.year, state.month + diff, 1);
+    state.year = d.getFullYear();
+    state.month = d.getMonth();
+    load();
+  }
+
+  async function load() {
+    state.days = {};
+    state.savedAt = null;
+    state.dirty = false;
+    $('comment').value = '';
+    render(); // 通信を待つあいだも、先にカレンダーを出しておく
+    // 管理画面で設定した臨時休業を取り込む
+    try {
+      const schedule = await Api.getSchedule(monthKey());
+      setRuntimeClosed(schedule ? schedule.closed : []);
+    } catch (e) {
+      setRuntimeClosed([]);
+    }
+    if (state.name) {
+      try {
+        const sub = await Api.getSubmission(monthKey(), state.name);
+        if (sub) {
+          // 提出後に休みになった日は外す
+          Object.entries(sub.days).forEach(([key, type]) => {
+            if (!isClosedDay(state.year, state.month, Number(key.slice(8)))) state.days[key] = type;
+          });
+          state.savedAt = sub.updatedAt;
+          $('comment').value = sub.comment || '';
+        }
+      } catch (e) {
+        toast('読み込みに失敗しました:' + e.message);
+      }
+    }
+    render();
+  }
+
+  function render() {
+    $('monthTitle').textContent = state.year + '年' + (state.month + 1) + '月';
+    renderDeadline();
+    renderCalendar();
+    renderStatus();
+    renderSummary();
+  }
+
+  function renderDeadline() {
+    const deadline = new Date(state.year, state.month - 1, CONFIG.DEADLINE_DAY, 23, 59, 59);
+    const el = $('deadline');
+    const text = '提出締切:' + (deadline.getMonth() + 1) + '月' + deadline.getDate() + '日';
+    const over = new Date() > deadline;
+    el.textContent = over ? text + '(締切を過ぎています。変更は店長に連絡してください)' : text;
+    el.classList.toggle('over', over);
+  }
+
+  function renderCalendar() {
+    const cal = $('calendar');
+    cal.innerHTML = '';
+    const first = new Date(state.year, state.month, 1).getDay();
+    const last = new Date(state.year, state.month + 1, 0).getDate();
+    for (let i = 0; i < first; i++) cal.appendChild(document.createElement('span'));
+    for (let d = 1; d <= last; d++) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset.day = d;
+      btn.innerHTML = '<span class="num">' + d + '</span><span class="mark"></span>';
+      if (isClosedDay(state.year, state.month, d)) {
+        btn.className = 'day closed';
+        btn.disabled = true;
+        btn.querySelector('.mark').textContent = '休';
+        btn.setAttribute('aria-label', state.month + 1 + '月' + d + '日 店休日');
+      } else {
+        btn.addEventListener('click', () => cycle(d, btn));
+        paintDay(btn, d);
+      }
+      cal.appendChild(btn);
+    }
+  }
+
+  function paintDay(btn, d) {
+    const dow = new Date(state.year, state.month, d).getDay();
+    const type = state.days[dateKey(d)];
+    btn.className = 'day' + (dow === 0 ? ' sun' : dow === 6 ? ' sat' : '') + (type ? ' ' + type : '');
+    btn.querySelector('.mark').textContent = type ? SHIFT_TYPES[type].short : '';
+    btn.setAttribute(
+      'aria-label',
+      state.month + 1 + '月' + d + '日 ' + (type ? SHIFT_TYPES[type].label : 'OFF')
+    );
+  }
+
+  // なし → 早番 → 遅番 → どちらでも可 → なし
+  function cycle(d, btn) {
+    const key = dateKey(d);
+    const next = SHIFT_ORDER[SHIFT_ORDER.indexOf(state.days[key]) + 1];
+    if (next) state.days[key] = next;
+    else delete state.days[key];
+    paintDay(btn, d);
+    markDirty();
+    renderSummary();
+  }
+
+  function markDirty() {
+    state.dirty = true;
+    renderStatus();
+  }
+
+  function renderStatus() {
+    const el = $('status');
+    if (state.dirty && state.savedAt) {
+      el.hidden = false;
+      el.className = 'status editing';
+      el.textContent = '変更があります。「提出する」を押すと反映されます。';
+    } else if (state.savedAt) {
+      const t = new Date(state.savedAt);
+      el.hidden = false;
+      el.className = 'status';
+      el.textContent =
+        '提出済み(' + (t.getMonth() + 1) + '/' + t.getDate() + ' ' + pad(t.getHours()) + ':' + pad(t.getMinutes()) + ')。修正して再提出できます。';
+    } else {
+      el.hidden = true;
+    }
+    $('submitBtn').textContent = state.savedAt ? '修正して再提出する' : 'この内容で提出する';
+  }
+
+  function renderSummary() {
+    const count = { early: 0, late: 0, any: 0 };
+    Object.values(state.days).forEach((t) => count[t]++);
+    const total = count.early + count.late + count.any;
+    $('summary').innerHTML =
+      '合計 <strong>' + total + '日</strong>(早番 ' + count.early + '・遅番 ' + count.late + '・どちらでも ' + count.any + ')';
+  }
+
+  async function submit() {
+    if (!state.name) {
+      toast('名前を選んでください');
+      $('nameSelect').focus();
+      return;
+    }
+    if (Object.keys(state.days).length === 0 && !confirm('全部の日がOFFになっています。このまま提出しますか?')) {
+      return;
+    }
+    const btn = $('submitBtn');
+    btn.disabled = true;
+    try {
+      const saved = await Api.saveSubmission({
+        name: state.name,
+        month: monthKey(),
+        days: state.days,
+        comment: $('comment').value.trim(),
+      });
+      state.savedAt = saved.updatedAt;
+      state.dirty = false;
+      renderStatus();
+      toast('提出しました');
+    } catch (e) {
+      toast('提出に失敗しました:' + e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+  }
+
+  Gate.enter().then(init);
+})();

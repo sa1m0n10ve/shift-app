@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1d5fbf">
+  <title>確定シフト</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="view">
+  <header class="app-header">
+    <h1>確定シフト</h1>
+  </header>
+  <nav class="tabs" aria-label="画面の切り替え">
+    <a href="index.html">シフト提出</a>
+    <a href="view.html" class="current" aria-current="page">確定シフト</a>
+  </nav>
+
+  <main class="container">
+    <section class="card">
+      <div class="month-nav">
+        <button id="prevMonth" class="icon-btn" type="button" aria-label="前の月">‹</button>
+        <h2 id="monthTitle"></h2>
+        <button id="nextMonth" class="icon-btn" type="button" aria-label="次の月">›</button>
+      </div>
+    </section>
+
+    <section id="notYet" class="card empty-card" hidden>
+      <p>この月のシフトはまだ公開されていません。</p>
+    </section>
+
+    <div id="published" hidden>
+      <section class="card">
+        <label class="field-label" for="nameSelect">自分のシフトを目立たせる</label>
+        <select id="nameSelect" class="select">
+          <option value="">全員を表示</option>
+        </select>
+        <p id="mySummary" class="summary" hidden></p>
+        <label class="check"><input id="onlyMine" type="checkbox"> 自分が入る日だけ表示</label>
+      </section>
+
+      <section class="card">
+        <div id="shiftList" class="shift-list"></div>
+        <p id="updated" class="updated"></p>
+      </section>
+    </div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/gate.js"></script>
+  <script src="js/view.js"></script>
+</body>
+</html>

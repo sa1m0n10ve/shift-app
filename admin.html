@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1d5fbf">
+  <title>シフト管理</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="admin">
+  <header class="app-header">
+    <h1>シフト管理</h1>
+  </header>
+
+  <main class="container wide">
+    <p id="localNote" class="note" hidden>
+      お試しモード:この端末で提出した分だけが表示されます。
+      <button id="sampleBtn" class="link-btn" type="button">サンプルデータを入れる</button>
+      <button id="clearBtn" class="link-btn" type="button">全部消す</button>
+    </p>
+
+    <section class="card">
+      <div class="month-nav">
+        <button id="prevMonth" class="icon-btn" type="button" aria-label="前の月">‹</button>
+        <h2 id="monthTitle"></h2>
+        <button id="nextMonth" class="icon-btn" type="button" aria-label="次の月">›</button>
+      </div>
+      <p id="deadline" class="deadline"></p>
+    </section>
+
+    <section class="card">
+      <h3 class="section-title">提出状況 <span id="submitCount" class="count"></span></h3>
+      <ul id="staffList" class="staff-list"></ul>
+    </section>
+
+    <section class="card">
+      <h3 class="section-title">シフト作成 <span id="shortCount" class="count"></span></h3>
+      <p class="hint first">
+        名前をタップすると担当に決まります(もう一度タップではずす)。
+        「可」の人は、タップするたびに 早番 → 遅番 → はずす と切り替わります。
+      </p>
+      <ul class="legend">
+        <li><span class="chip early">早</span>早番</li>
+        <li><span class="chip late">遅</span>遅番</li>
+        <li><span class="chip any">可</span>どちらでも可</li>
+      </ul>
+      <div class="toolbar">
+        <button id="autoBtn" class="sub-btn primary" type="button">自動で割り当てる</button>
+        <button id="resetBtn" class="sub-btn" type="button">全部はずす</button>
+        <span id="saveStatus" class="save-status" role="status" aria-live="polite"></span>
+      </div>
+      <div class="publish-box">
+        <span id="publishText"></span>
+        <button id="publishBtn" class="sub-btn" type="button"></button>
+      </div>
+      <div id="dayList" class="day-list"></div>
+    </section>
+    <section class="card">
+      <h3 class="section-title">TimeTree用の出力 <span id="exportCount" class="count"></span></h3>
+      <p class="hint first">
+        1日1予定ぶんのタイトルを作ります。「コピー」を押して、TimeTreeの予定タイトルに貼り付けてください。
+      </p>
+      <label class="field-label" for="formatSelect">タイトルの形</label>
+      <select id="formatSelect" class="select">
+        <option value="slots">田中早番　山田遅番(早番・遅番を付ける)</option>
+        <option value="names">田中・山田(名前だけ)</option>
+      </select>
+      <div class="toolbar export-tools">
+        <button id="copyAllBtn" class="sub-btn" type="button">一覧をまとめてコピー</button>
+        <button id="icsBtn" class="sub-btn" type="button">カレンダーファイル(.ics)を保存</button>
+      </div>
+      <div id="exportList" class="export-list"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/gate.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

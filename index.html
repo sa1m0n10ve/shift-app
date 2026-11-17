@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1d5fbf">
+  <title>シフト提出</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>シフト提出</h1>
+  </header>
+  <nav class="tabs" aria-label="画面の切り替え">
+    <a href="index.html" class="current" aria-current="page">シフト提出</a>
+    <a href="view.html">確定シフト</a>
+  </nav>
+
+  <main class="container">
+    <p id="localNote" class="note" hidden>お試しモード:入力内容はこの端末の中だけに保存されます。</p>
+
+    <section class="card">
+      <label class="field-label" for="nameSelect">名前</label>
+      <select id="nameSelect" class="select">
+        <option value="">選んでください</option>
+      </select>
+    </section>
+
+    <section class="card">
+      <div class="month-nav">
+        <button id="prevMonth" class="icon-btn" type="button" aria-label="前の月">‹</button>
+        <h2 id="monthTitle"></h2>
+        <button id="nextMonth" class="icon-btn" type="button" aria-label="次の月">›</button>
+      </div>
+      <p id="deadline" class="deadline"></p>
+      <p id="status" class="status" hidden></p>
+
+      <p class="hint">日付をタップするたびに切り替わります。何も付けていない日は OFF(入れない)として扱います</p>
+      <ul class="legend">
+        <li><span class="chip early">早</span>早番</li>
+        <li><span class="chip late">遅</span>遅番</li>
+        <li><span class="chip any">可</span>どちらでも可</li>
+        <li><span class="chip none"></span>OFF(入れない)</li>
+        <li><span class="chip closed">休</span>店休日</li>
+      </ul>
+
+      <div class="weekdays" aria-hidden="true">
+        <span class="sun">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span class="sat">土</span>
+      </div>
+      <div id="calendar" class="calendar"></div>
+
+      <p id="summary" class="summary"></p>
+    </section>
+
+    <section class="card">
+      <label class="field-label" for="comment">連絡事項(任意)</label>
+      <textarea id="comment" class="textarea" rows="3" placeholder="例:15日は18時から入れます"></textarea>
+    </section>
+  </main>
+
+  <footer class="submit-bar">
+    <button id="submitBtn" class="primary-btn" type="button">この内容で提出する</button>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/gate.js"></script>
+  <script src="js/submit.js"></script>
+</body>
+</html>
