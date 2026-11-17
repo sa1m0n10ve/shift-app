@@ -409,3 +409,7 @@ body.admin .toast { bottom: 24px; }
 }
 .gate-box h2 { margin: 0 0 16px; font-size: 20px; text-align: center; color: var(--blue); }
 .gate-error { min-height: 1.6em; margin: 8px 0; font-size: 14px; color: #b3400f; }
+
+/* ---------- 読み込み中 ---------- */
+.status.loading { background: #eef1f5; color: var(--muted); }
+.calendar.loading { opacity: 0.45; pointer-events: none; }

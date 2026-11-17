@@ -65,35 +65,44 @@
     load();
   }
 
+  let loadSeq = 0;
+
   async function load() {
+    const seq = ++loadSeq;
+    const month = monthKey();
+    const name = state.name;
     state.days = {};
     state.savedAt = null;
     state.dirty = false;
+    state.loading = true;
     $('comment').value = '';
     render(); // 通信を待つあいだも、先にカレンダーを出しておく
-    // 管理画面で設定した臨時休業を取り込む
-    try {
-      const schedule = await Api.getSchedule(monthKey());
-      setRuntimeClosed(schedule ? schedule.closed : []);
-    } catch (e) {
-      setRuntimeClosed([]);
+
+    // 臨時休業と、自分の提出済みデータを同時に取りに行く
+    let failed = '';
+    const [schedule, sub] = await Promise.all([
+      Api.getSchedule(month).catch(() => null),
+      name
+        ? Api.getSubmission(month, name).catch((e) => {
+            failed = e.message;
+            return null;
+          })
+        : null,
+    ]);
+    if (seq !== loadSeq) return; // 待っているあいだに名前や月が変わった
+
+    setRuntimeClosed(schedule ? schedule.closed : []);
+    if (sub) {
+      // 提出後に休みになった日は外す
+      Object.entries(sub.days).forEach(([key, type]) => {
+        if (!isClosedDay(state.year, state.month, Number(key.slice(8)))) state.days[key] = type;
+      });
+      state.savedAt = sub.updatedAt;
+      $('comment').value = sub.comment || '';
     }
-    if (state.name) {
-      try {
-        const sub = await Api.getSubmission(monthKey(), state.name);
-        if (sub) {
-          // 提出後に休みになった日は外す
-          Object.entries(sub.days).forEach(([key, type]) => {
-            if (!isClosedDay(state.year, state.month, Number(key.slice(8)))) state.days[key] = type;
-          });
-          state.savedAt = sub.updatedAt;
-          $('comment').value = sub.comment || '';
-        }
-      } catch (e) {
-        toast('読み込みに失敗しました:' + e.message);
-      }
-    }
+    state.loading = false;
     render();
+    if (failed) toast('読み込みに失敗しました:' + failed);
   }
 
   function render() {
@@ -166,7 +175,13 @@
 
   function renderStatus() {
     const el = $('status');
-    if (state.dirty && state.savedAt) {
+    $('calendar').classList.toggle('loading', !!state.loading);
+    $('submitBtn').disabled = !!state.loading;
+    if (state.loading) {
+      el.hidden = false;
+      el.className = 'status loading';
+      el.textContent = '読み込み中…';
+    } else if (state.dirty && state.savedAt) {
       el.hidden = false;
       el.className = 'status editing';
       el.textContent = '変更があります。「提出する」を押すと反映されます。';
