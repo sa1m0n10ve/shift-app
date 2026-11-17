@@ -9,10 +9,25 @@
   const state = { year: 0, month: 0, schedule: null, name: '' };
   const monthKey = () => state.year + '-' + pad(state.month + 1);
 
+  // 一度読んだ月は覚えておき、月を行き来するときに待たせない
+  const cache = {};
+  function fetchSchedule(key) {
+    if (!cache[key]) cache[key] = Api.getSchedule(key).catch(() => null);
+    return cache[key];
+  }
+  const keyOf = (date) => date.getFullYear() + '-' + pad(date.getMonth() + 1);
+
   async function init() {
     const now = new Date();
     state.year = now.getFullYear();
     state.month = now.getMonth();
+    state.loading = true;
+    render();
+
+    // 今月と来月のシフトを、スタッフ名の読み込みと同時に取りに行く
+    const next = new Date(state.year, state.month + 1, 1);
+    const pending = Promise.all([fetchSchedule(monthKey()), fetchSchedule(keyOf(next))]);
+    await Gate.enter();
 
     const select = $('nameSelect');
     CONFIG.STAFF.forEach((n) => select.add(new Option(n, n)));
@@ -29,14 +44,13 @@
     $('prevMonth').addEventListener('click', () => moveMonth(-1));
     $('nextMonth').addEventListener('click', () => moveMonth(1));
 
-    await load();
     // 今月が未公開で来月が公開済みなら、最初から来月を見せる
-    if (!isPublished()) {
-      const next = new Date(state.year, state.month + 1, 1);
-      const nextKey = next.getFullYear() + '-' + pad(next.getMonth() + 1);
-      const nextSchedule = await Api.getSchedule(nextKey).catch(() => null);
-      if (nextSchedule && nextSchedule.published) moveMonth(1);
+    const [current, upcoming] = await pending;
+    if (!(current && current.published) && upcoming && upcoming.published) {
+      state.year = next.getFullYear();
+      state.month = next.getMonth();
     }
+    load();
   }
 
   const isPublished = () => !!(state.schedule && state.schedule.published);
@@ -48,13 +62,17 @@
     return load();
   }
 
+  let loadSeq = 0;
   async function load() {
-    try {
-      state.schedule = await Api.getSchedule(monthKey());
-    } catch (e) {
-      state.schedule = null;
-    }
-    setRuntimeClosed(state.schedule ? state.schedule.closed : []);
+    const seq = ++loadSeq;
+    state.loading = true;
+    state.schedule = null;
+    render();
+    const schedule = await fetchSchedule(monthKey());
+    if (seq !== loadSeq) return; // 待っているあいだに別の月へ移った
+    state.schedule = schedule;
+    state.loading = false;
+    setRuntimeClosed(schedule ? schedule.closed : []);
     render();
   }
 
@@ -68,6 +86,7 @@
   function render() {
     $('monthTitle').textContent = state.year + '年' + (state.month + 1) + '月';
     $('notYet').hidden = isPublished();
+    $('notYet').firstElementChild.textContent = state.loading ? '読み込み中…' : 'この月のシフトはまだ公開されていません。';
     $('published').hidden = !isPublished();
     if (!isPublished()) return;
 
@@ -126,5 +145,5 @@
     $('updated').textContent = '最終更新:' + (t.getMonth() + 1) + '/' + t.getDate() + ' ' + pad(t.getHours()) + ':' + pad(t.getMinutes());
   }
 
-  Gate.enter().then(init);
+  init();
 })();
