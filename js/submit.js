@@ -17,9 +17,11 @@
   const dateKey = (d) => monthKey() + '-' + pad(d);
 
   function init() {
-    // 提出対象は来月
+    // 提出対象は来月。締切日(20日)を過ぎたら、さらに次の月にする
+    // 例:11/1〜11/20 → 12月分、11/21〜12/20 → 1月分
     const now = new Date();
-    const target = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const ahead = now.getDate() > CONFIG.DEADLINE_DAY ? 2 : 1;
+    const target = new Date(now.getFullYear(), now.getMonth() + ahead, 1);
     state.year = target.getFullYear();
     state.month = target.getMonth();
 
