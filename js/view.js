@@ -41,16 +41,6 @@
       if (state.name) localStorage.setItem(NAME_KEY, state.name);
       render();
     });
-    $('saveImgBtn').addEventListener('click', async () => {
-      const btn = $('saveImgBtn');
-      btn.disabled = true;
-      try {
-        await Poster.save(state.schedule, state.year, state.month);
-      } finally {
-        btn.disabled = false;
-      }
-    });
-    $('printBtn').addEventListener('click', () => Poster.print(state.schedule, state.year, state.month));
     $('prevMonth').addEventListener('click', () => moveMonth(-1));
     $('nextMonth').addEventListener('click', () => moveMonth(1));
 

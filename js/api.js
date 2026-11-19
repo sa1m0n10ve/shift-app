@@ -17,8 +17,9 @@ const Api = (() => {
     async login() {
       return { staff: CONFIG.STAFF };
     },
+    // お試しモードでは暗証番号は確認しない
     async getSubmission(month, name) {
-      return read(KEY)[month + ':' + name] || null;
+      return { status: 'ok', hasPin: true, submission: read(KEY)[month + ':' + name] || null };
     },
     async saveSubmission(sub) {
       const all = read(KEY);
@@ -64,8 +65,8 @@ const Api = (() => {
 
   const remote = {
     login: () => call('login', {}),
-    getSubmission: (month, name) => call('getSubmission', { month, name }),
-    saveSubmission: (sub) => call('saveSubmission', { submission: sub }),
+    getSubmission: (month, name, pin) => call('getSubmission', { month, name, pin }),
+    saveSubmission: (sub, pin) => call('saveSubmission', { submission: sub, pin }),
     listSubmissions: (month) => call('listSubmissions', { month }),
     getSchedule: (month) => call('getSchedule', { month }),
     saveSchedule: (schedule) => call('saveSchedule', { schedule }),

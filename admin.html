@@ -56,16 +56,12 @@
       <div id="dayList" class="day-list"></div>
     </section>
     <section class="card">
-      <h3 class="section-title">公平さの目安 <span id="fairNote" class="count"></span></h3>
-      <p class="hint first">希望を出した日のうち、何日シフトに入れたか。棒が短い人ほど、希望が通っていません。</p>
-      <div class="fair-wrap">
-        <table class="fair-table">
-          <thead>
-            <tr><th scope="col">名前</th><th scope="col">希望</th><th scope="col">確定</th><th scope="col">早番</th><th scope="col">遅番</th><th scope="col" class="fair-bar-col">希望が通った割合</th></tr>
-          </thead>
-          <tbody id="fairBody"></tbody>
-        </table>
+      <h3 class="section-title">印刷・画像保存(A4横)</h3>
+      <div class="toolbar">
+        <button id="saveImgBtn" class="sub-btn primary" type="button">画像で保存・LINEで送る</button>
+        <button id="printBtn" class="sub-btn" type="button">印刷する</button>
       </div>
+      <p class="hint first">今の割り当てがそのまま入ります。印刷するときは、用紙を「A4」、向きを「横」にしてください。</p>
     </section>
 
     <section class="card">
@@ -91,6 +87,7 @@
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
   <script src="js/gate.js"></script>
+  <script src="js/poster.js"></script>
   <script src="js/admin.js"></script>
 </body>
 </html>
