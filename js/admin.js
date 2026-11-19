@@ -143,6 +143,7 @@
     const deadline = new Date(state.year, state.month - 1, CONFIG.DEADLINE_DAY);
     $('deadline').textContent = '提出締切:' + (deadline.getMonth() + 1) + '月' + deadline.getDate() + '日';
     renderStaff();
+    renderFair();
     renderDays();
     const pub = state.schedule.published;
     $('publishText').textContent = pub ? 'このシフトは公開中です(スタッフが見られます)' : 'このシフトはまだ非公開です(作成中)';
@@ -272,6 +273,59 @@
     if (className) node.className = className;
     if (text != null) node.textContent = text;
     return node;
+  }
+
+  // 人ごとの「希望日数 → 確定日数」の表
+  function renderFair() {
+    const body = $('fairBody');
+    body.innerHTML = '';
+    const byName = {};
+    state.subs.forEach((sub) => (byName[sub.name] = sub));
+    const names = CONFIG.STAFF.concat(Object.keys(byName).filter((n) => !CONFIG.STAFF.includes(n)));
+    const rows = names.map((name) => {
+      const sub = byName[name];
+      // 店休日・臨時休業になった日の希望は数えない
+      const wished = sub
+        ? Object.keys(sub.days).filter((k) => !isClosedDay(state.year, state.month, Number(k.slice(8)))).length
+        : 0;
+      const slots = { early: 0, late: 0 };
+      Object.entries(state.schedule.assign).forEach(([key, a]) => {
+        if (isClosedDay(state.year, state.month, Number(key.slice(8)))) return;
+        SLOTS.forEach((slot) => {
+          if (a[slot].includes(name)) slots[slot]++;
+        });
+      });
+      const fixed = slots.early + slots.late;
+      return { name, submitted: !!sub, wished, fixed, slots, rate: wished ? fixed / wished : null };
+    });
+
+    const rates = rows.filter((r) => r.rate !== null).map((r) => r.rate);
+    const avg = rates.length ? rates.reduce((x, y) => x + y, 0) / rates.length : null;
+    rows.forEach((r) => {
+      const tr = el('tr', r.submitted ? '' : 'pending');
+      tr.appendChild(el('th', 'fair-name', r.name)).setAttribute('scope', 'row');
+      tr.appendChild(el('td', 'num', r.submitted ? r.wished + '日' : '未提出'));
+      tr.appendChild(el('td', 'num strong', r.fixed + '日'));
+      tr.appendChild(el('td', 'num', String(r.slots.early)));
+      tr.appendChild(el('td', 'num', String(r.slots.late)));
+      const cell = el('td', 'fair-bar-col');
+      if (r.rate !== null) {
+        const pct = Math.round(r.rate * 100);
+        // 平均より20ポイント以上低い人に色を付ける
+        const low = avg !== null && rates.length > 1 && r.rate < avg - 0.2;
+        const bar = el('div', 'fair-bar' + (low ? ' low' : ''));
+        const fill = el('span', 'fair-fill');
+        fill.style.width = Math.min(pct, 100) + '%';
+        bar.appendChild(fill);
+        cell.appendChild(bar);
+        cell.appendChild(el('span', 'fair-pct' + (low ? ' low' : ''), pct + '%'));
+      } else {
+        cell.appendChild(el('span', 'day-empty', r.submitted ? '希望なし' : '—'));
+      }
+      tr.appendChild(cell);
+      body.appendChild(tr);
+    });
+    $('fairNote').textContent = avg === null ? '' : '平均 ' + Math.round(avg * 100) + '%';
   }
 
   // 誰が提出済みか

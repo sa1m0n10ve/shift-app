@@ -56,6 +56,19 @@
       <div id="dayList" class="day-list"></div>
     </section>
     <section class="card">
+      <h3 class="section-title">公平さの目安 <span id="fairNote" class="count"></span></h3>
+      <p class="hint first">希望を出した日のうち、何日シフトに入れたか。棒が短い人ほど、希望が通っていません。</p>
+      <div class="fair-wrap">
+        <table class="fair-table">
+          <thead>
+            <tr><th scope="col">名前</th><th scope="col">希望</th><th scope="col">確定</th><th scope="col">早番</th><th scope="col">遅番</th><th scope="col" class="fair-bar-col">希望が通った割合</th></tr>
+          </thead>
+          <tbody id="fairBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
       <h3 class="section-title">TimeTree用の出力 <span id="exportCount" class="count"></span></h3>
       <p class="hint first">
         1日1予定ぶんのタイトルを作ります。「コピー」を押して、TimeTreeの予定タイトルに貼り付けてください。

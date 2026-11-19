@@ -458,3 +458,29 @@ body.admin .toast { bottom: 24px; }
   .cal-num { font-size: 14px; }
   .cal-entry { font-size: 13px; padding: 3px 4px; letter-spacing: 0; }
 }
+
+/* ---------- 公平さの目安 ---------- */
+.fair-wrap { overflow-x: auto; }
+.fair-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.fair-table th, .fair-table td { padding: 8px 6px; border-top: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.fair-table thead th { border-top: none; font-size: 12px; font-weight: 600; color: var(--muted); }
+.fair-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.fair-table .strong { font-weight: 700; }
+.fair-table tr.pending .fair-name, .fair-table tr.pending td { color: var(--muted); }
+.fair-bar-col { width: 40%; min-width: 120px; }
+td.fair-bar-col { display: flex; align-items: center; gap: 8px; }
+.fair-bar { flex: 1; height: 10px; background: #eef1f5; border-radius: 5px; overflow: hidden; }
+.fair-fill { display: block; height: 100%; background: var(--blue); border-radius: 5px; }
+.fair-bar.low .fair-fill { background: #e07a3f; }
+.fair-pct { font-size: 13px; min-width: 3em; text-align: right; font-variant-numeric: tabular-nums; }
+.fair-pct.low { color: #b3400f; font-weight: 700; }
+
+/* ---------- 印刷(A4横に画像1枚) ---------- */
+#printArea { display: none; }
+@media print {
+  @page { size: A4 landscape; margin: 0; }
+  body { padding: 0; background: #fff; }
+  body > *:not(#printArea) { display: none !important; }
+  #printArea { display: block; }
+  #printArea img { display: block; width: 297mm; height: 210mm; }
+}
