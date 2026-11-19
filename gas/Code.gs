@@ -19,7 +19,7 @@ var SHIFT_SHORT = { early: '早', late: '遅', any: '可' };
 // ---------- 最初に1回だけ実行する ----------
 function setup() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  ensureSheet_(ss, SHEET.staff, ['名前', '暗証番号(自動で入ります)'], []);
+  ensureSheet_(ss, SHEET.staff, ['名前'], []);
   ensureSheet_(ss, SHEET.submissions, ['月', '名前', '希望(データ)', '希望(読みやすい形)', '連絡事項', '更新日時'], []);
   ensureSheet_(ss, SHEET.schedules, ['月', 'データ', '公開', '更新日時'], []);
 }
@@ -62,21 +62,10 @@ function handle_(req) {
       return { staff: getStaff_(ss) };
 
     case 'getSubmission':
-      // 本人の暗証番号が合うときだけ中身を返す
-      var pinState = checkPin_(ss, String(req.name), req.pin);
-      if (pinState === 'locked') return { status: 'locked' };
-      return {
-        status: 'ok',
-        hasPin: pinState === 'ok',
-        submission: findSubmission_(ss, checkMonth_(req.month), String(req.name)),
-      };
+      return findSubmission_(ss, checkMonth_(req.month), String(req.name));
 
     case 'saveSubmission':
       return withLock_(function () {
-        var name = String((req.submission || {}).name || '').trim();
-        var state = checkPin_(ss, name, req.pin);
-        if (state === 'locked') throw new Error('PIN');
-        if (state === 'none') setPin_(ss, name, req.pin); // 初めての人はここで暗証番号を決める
         return saveSubmission_(ss, req.submission);
       });
 
@@ -97,38 +86,6 @@ function handle_(req) {
     default:
       throw new Error('不明な操作です');
   }
-}
-
-// ---------- 暗証番号(1人ひとつ。「スタッフ」シートのB列に、元に戻せない形で保存) ----------
-function pinHash_(name, pin) {
-  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, 'shift-app:' + name + ':' + pin, Utilities.Charset.UTF_8);
-  return Utilities.base64Encode(bytes);
-}
-
-function staffRow_(ss, name) {
-  var rows = ss.getSheetByName(SHEET.staff).getDataRange().getDisplayValues();
-  for (var i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]).trim() === name) return { index: i + 1, hash: String(rows[i][1] || '').trim() };
-  }
-  return null;
-}
-
-// 'none' = まだ決めていない / 'ok' = 合っている / 'locked' = 違う・入っていない
-function checkPin_(ss, name, pin) {
-  var row = staffRow_(ss, name);
-  if (!row) throw new Error('「スタッフ」シートにない名前です:' + name);
-  if (!row.hash) return 'none';
-  pin = String(pin == null ? '' : pin);
-  return /^\d{4}$/.test(pin) && pinHash_(name, pin) === row.hash ? 'ok' : 'locked';
-}
-
-function setPin_(ss, name, pin) {
-  pin = String(pin == null ? '' : pin);
-  if (!/^\d{4}$/.test(pin)) throw new Error('NEED_PIN');
-  var row = staffRow_(ss, name);
-  var cell = ss.getSheetByName(SHEET.staff).getRange(row.index, 2, 1, 1);
-  cell.setNumberFormat('@');
-  cell.setValues([[pinHash_(name, pin)]]);
 }
 
 function withLock_(fn) {

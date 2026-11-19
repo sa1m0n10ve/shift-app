@@ -2,23 +2,6 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const NAME_KEY = 'shiftapp:name';
-  const PIN_KEY = 'shiftapp:pin:'; // + 名前。そのスマホでは暗証番号を覚えておく
-
-  const getPin = (name) => {
-    try {
-      return localStorage.getItem(PIN_KEY + name) || '';
-    } catch (e) {
-      return '';
-    }
-  };
-  const setPin = (name, pin) => {
-    try {
-      if (pin) localStorage.setItem(PIN_KEY + name, pin);
-      else localStorage.removeItem(PIN_KEY + name);
-    } catch (e) {
-      // 覚えられなくても、毎回入れれば使える
-    }
-  };
 
   const state = {
     name: '',
@@ -65,10 +48,6 @@
     $('nextMonth').addEventListener('click', () => moveMonth(1));
     $('comment').addEventListener('input', markDirty);
     $('submitBtn').addEventListener('click', submit);
-    $('pinBtn').addEventListener('click', unlock);
-    $('pinInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && state.pinMode === 'unlock') unlock();
-    });
     window.addEventListener('beforeunload', (e) => {
       if (state.dirty) e.preventDefault();
     });
@@ -98,17 +77,15 @@
     state.savedAt = null;
     state.dirty = false;
     state.loading = true;
-    state.locked = false;
     $('comment').value = '';
     render(); // 通信を待つあいだも、先にカレンダーを出しておく
-    renderPin();
 
     // 臨時休業と、自分の提出済みデータを同時に取りに行く
     let failed = '';
-    let [schedule, sub] = await Promise.all([
+    const [schedule, sub] = await Promise.all([
       Api.getSchedule(month).catch(() => null),
       name
-        ? Api.getSubmission(month, name, getPin(name)).catch((e) => {
+        ? Api.getSubmission(month, name).catch((e) => {
             failed = e.message;
             return null;
           })
@@ -117,18 +94,6 @@
     if (seq !== loadSeq) return; // 待っているあいだに名前や月が変わった
 
     setRuntimeClosed(schedule ? schedule.closed : []);
-    state.locked = false;
-    state.hasPin = true;
-    if (sub && sub.status === 'locked') {
-      // 暗証番号が違う・まだ入れていない(覚えていた番号が古い場合も)
-      setPin(name, '');
-      state.locked = true;
-      sub = null;
-    } else if (sub && 'status' in sub) {
-      state.hasPin = sub.hasPin;
-      sub = sub.submission;
-    }
-    // ('status' がない場合は暗証番号に対応する前のスクリプト。提出データがそのまま返る)
     if (sub) {
       // 提出後に休みになった日は外す
       Object.entries(sub.days).forEach(([key, type]) => {
@@ -139,40 +104,7 @@
     }
     state.loading = false;
     render();
-    renderPin();
     if (failed) toast('読み込みに失敗しました:' + failed);
-  }
-
-  // 暗証番号の欄。unlock = 見るために入れる / create = 初めての提出で決める
-  function renderPin() {
-    const mode = !state.name || state.loading ? null : state.locked ? 'unlock' : !state.hasPin ? 'create' : null;
-    state.pinMode = mode;
-    $('pinCard').hidden = !mode;
-    $('calCard').hidden = mode === 'unlock';
-    $('commentCard').hidden = mode === 'unlock';
-    document.querySelector('.submit-bar').hidden = mode === 'unlock';
-    $('pinBtn').hidden = mode !== 'unlock';
-    if (mode === 'unlock') {
-      $('pinLabel').textContent = state.name + 'さんの暗証番号(4桁)';
-      $('pinHint').textContent = '自分の提出内容を見たり直したりするには、暗証番号が必要です。忘れたときは店長に連絡してください。';
-    } else if (mode === 'create') {
-      $('pinLabel').textContent = '暗証番号を決めてください(数字4桁)';
-      $('pinHint').textContent = '次から自分の提出内容を見るときに使います。ほかの人には教えないでください。';
-    }
-  }
-
-  async function unlock() {
-    const pin = $('pinInput').value.trim();
-    if (!/^\d{4}$/.test(pin)) {
-      toast('数字4桁で入れてください');
-      return;
-    }
-    $('pinBtn').disabled = true;
-    setPin(state.name, pin);
-    $('pinInput').value = '';
-    await load();
-    $('pinBtn').disabled = false;
-    if (state.locked) toast('暗証番号が違います');
   }
 
   function render() {
@@ -284,46 +216,21 @@
     if (Object.keys(state.days).length === 0 && !confirm('全部の日がOFFになっています。このまま提出しますか?')) {
       return;
     }
-    // 初めて提出する人は、ここで暗証番号を決める
-    let pin = getPin(state.name);
-    if (!state.hasPin) {
-      pin = $('pinInput').value.trim();
-      if (!/^\d{4}$/.test(pin)) {
-        toast('暗証番号(数字4桁)を決めてください');
-        $('pinInput').focus();
-        return;
-      }
-    }
     const btn = $('submitBtn');
     btn.disabled = true;
     try {
-      const saved = await Api.saveSubmission(
-        {
-          name: state.name,
-          month: monthKey(),
-          days: state.days,
-          comment: $('comment').value.trim(),
-        },
-        pin
-      );
-      if (!state.hasPin) {
-        setPin(state.name, pin);
-        state.hasPin = true;
-        $('pinInput').value = '';
-        renderPin();
-      }
+      const saved = await Api.saveSubmission({
+        name: state.name,
+        month: monthKey(),
+        days: state.days,
+        comment: $('comment').value.trim(),
+      });
       state.savedAt = saved.updatedAt;
       state.dirty = false;
       renderStatus();
       toast('提出しました');
     } catch (e) {
-      if (e.message === 'PIN') {
-        setPin(state.name, '');
-        toast('暗証番号が変わっています。入れ直してください');
-        load();
-      } else {
-        toast('提出に失敗しました:' + e.message);
-      }
+      toast('提出に失敗しました:' + e.message);
     } finally {
       btn.disabled = false;
     }

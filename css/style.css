@@ -469,8 +469,3 @@ body.admin .toast { bottom: 24px; }
   #printArea img { display: block; width: 297mm; height: 210mm; }
 }
 
-/* ---------- 暗証番号 ---------- */
-.pin-card { border-color: var(--blue); }
-.pin-row { display: flex; gap: 8px; }
-.pin-input { flex: 1; letter-spacing: 0.4em; font-size: 20px; }
-.pin-card .hint { margin-bottom: 0; }
