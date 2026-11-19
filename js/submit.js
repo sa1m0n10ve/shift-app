@@ -73,14 +73,25 @@
     const seq = ++loadSeq;
     const month = monthKey();
     const name = state.name;
-    state.days = {};
-    state.savedAt = null;
     state.dirty = false;
-    state.loading = true;
     $('comment').value = '';
-    render(); // 通信を待つあいだも、先にカレンダーを出しておく
 
-    // 臨時休業と、自分の提出済みデータを同時に取りに行く
+    // 前回この端末で見た内容があれば、通信を待たずにすぐ出す
+    const cachedSchedule = Api.peekSchedule(month);
+    const cachedSub = name ? Api.peekSubmission(month, name) : null;
+    const hasCache = cachedSchedule !== undefined && (!name || cachedSub !== undefined);
+    if (hasCache) {
+      apply(cachedSchedule, cachedSub);
+      state.loading = false;
+      state.refreshing = true;
+    } else {
+      state.days = {};
+      state.savedAt = null;
+      state.loading = true;
+    }
+    render();
+
+    // 最新の内容を取りに行く(臨時休業と自分の提出は1回の通信にまとめて送られる)
     let failed = '';
     const [schedule, sub] = await Promise.all([
       Api.getSchedule(month).catch(() => null),
@@ -92,8 +103,25 @@
         : null,
     ]);
     if (seq !== loadSeq) return; // 待っているあいだに名前や月が変わった
+    state.refreshing = false;
+    state.loading = false;
+    if (failed && hasCache) {
+      render(); // 通信できなくても、前回の内容は見られる
+      toast('最新の内容を読み込めませんでした');
+      return;
+    }
+    // 待っているあいだにタップして変えていたら、その変更は消さない
+    if (!state.dirty) apply(schedule, sub);
+    else if (sub) state.savedAt = sub.updatedAt;
+    render();
+    if (failed) toast('読み込みに失敗しました:' + failed);
+  }
 
+  function apply(schedule, sub) {
     setRuntimeClosed(schedule ? schedule.closed : []);
+    state.days = {};
+    state.savedAt = null;
+    $('comment').value = '';
     if (sub) {
       // 提出後に休みになった日は外す
       Object.entries(sub.days).forEach(([key, type]) => {
@@ -102,9 +130,6 @@
       state.savedAt = sub.updatedAt;
       $('comment').value = sub.comment || '';
     }
-    state.loading = false;
-    render();
-    if (failed) toast('読み込みに失敗しました:' + failed);
   }
 
   function render() {

@@ -41,16 +41,42 @@
       if (state.name) localStorage.setItem(NAME_KEY, state.name);
       render();
     });
-    $('prevMonth').addEventListener('click', () => moveMonth(-1));
-    $('nextMonth').addEventListener('click', () => moveMonth(1));
+    $('prevMonth').addEventListener('click', () => {
+      state.userMoved = true;
+      moveMonth(-1);
+    });
+    $('nextMonth').addEventListener('click', () => {
+      state.userMoved = true;
+      moveMonth(1);
+    });
 
     // 今月が未公開で来月が公開済みなら、最初から来月を見せる
-    const [current, upcoming] = await pending;
-    if (!(current && current.published) && upcoming && upcoming.published) {
-      state.year = next.getFullYear();
-      state.month = next.getMonth();
+    const pickMonth = (current, upcoming) => {
+      const useNext = !(current && current.published) && !!(upcoming && upcoming.published);
+      const target = useNext ? next : now;
+      state.year = target.getFullYear();
+      state.month = target.getMonth();
+    };
+    // 前回この端末で見た内容があれば、通信を待たずにすぐ出す
+    const cachedCur = Api.peekSchedule(keyOf(now));
+    if (cachedCur !== undefined) {
+      pickMonth(cachedCur, Api.peekSchedule(keyOf(next)));
+      showCached();
     }
-    load();
+    const [current, upcoming] = await pending;
+    if (!state.userMoved) pickMonth(current, upcoming);
+    if (!state.userMoved || cachedCur === undefined) load();
+  }
+
+  // 前回の内容を表示しておく(最新が届いたら load() で置き換わる)
+  function showCached() {
+    const cached = Api.peekSchedule(monthKey());
+    if (cached === undefined) return false;
+    state.schedule = cached;
+    state.loading = false;
+    setRuntimeClosed(cached ? cached.closed : []);
+    render();
+    return true;
   }
 
   const isPublished = () => !!(state.schedule && state.schedule.published);
@@ -65,9 +91,11 @@
   let loadSeq = 0;
   async function load() {
     const seq = ++loadSeq;
-    state.loading = true;
-    state.schedule = null;
-    render();
+    if (!showCached()) {
+      state.loading = true;
+      state.schedule = null;
+      render();
+    }
     const schedule = await fetchSchedule(monthKey());
     if (seq !== loadSeq) return; // 待っているあいだに別の月へ移った
     state.schedule = schedule;

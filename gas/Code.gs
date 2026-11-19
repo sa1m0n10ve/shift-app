@@ -58,6 +58,17 @@ function handle_(req) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   // リンクを知っている人は全員、すべての操作ができる(合言葉・パスワードなし)
   switch (req.action) {
+    case 'batch':
+      // 同時に来た問い合わせをまとめて処理する(1回の通信で済ませるため)
+      return (req.requests || []).slice(0, 10).map(function (one) {
+        try {
+          if (one.action === 'batch') throw new Error('不明な操作です');
+          return { data: handle_(one) };
+        } catch (err) {
+          return { error: err.message || String(err) };
+        }
+      });
+
     case 'login':
       return { staff: getStaff_(ss) };
 

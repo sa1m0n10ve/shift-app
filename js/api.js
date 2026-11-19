@@ -44,30 +44,89 @@ const Api = (() => {
   };
 
   // ---------- 本番(スプレッドシートに保存) ----------
-  async function call(action, payload) {
+  // 1回の通信に2〜3秒かかり、同時に送っても順番に処理されるため、
+  // 同じ瞬間に出た問い合わせは1つにまとめて送る。
+  async function send(body) {
     let res;
     try {
       res = await fetch(CONFIG.API_URL, {
         method: 'POST',
         // Apps Script は text/plain で送ると事前確認(プリフライト)なしで受け取れる
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action, ...payload }),
+        body: JSON.stringify(body),
       });
     } catch (e) {
       throw new Error('通信できませんでした。電波の状態を確認してください');
     }
     if (!res.ok) throw new Error('通信に失敗しました (' + res.status + ')');
-    const json = await res.json();
+    return res.json();
+  }
+
+  async function sendOne(req) {
+    const json = await send(req);
     if (json.error) throw new Error(json.error);
     return json.data;
   }
 
+  let queue = [];
+  let timer = null;
+  let canBatch = true; // まとめ送りに対応していない古いスクリプトなら false にする
+
+  function call(action, payload) {
+    const req = { action, ...payload };
+    if (!canBatch) return sendOne(req);
+    return new Promise((resolve, reject) => {
+      queue.push({ req, resolve, reject });
+      if (!timer) timer = setTimeout(flush, 0);
+    });
+  }
+
+  async function flush() {
+    const items = queue;
+    queue = [];
+    timer = null;
+    const runEach = () => items.forEach((it) => sendOne(it.req).then(it.resolve, it.reject));
+    if (items.length === 1 || !canBatch) return runEach();
+    try {
+      const json = await send({ action: 'batch', requests: items.map((it) => it.req) });
+      if (json.error) {
+        canBatch = false; // 古いスクリプト:1つずつ送り直す
+        return runEach();
+      }
+      json.data.forEach((r, i) => (r.error ? items[i].reject(new Error(r.error)) : items[i].resolve(r.data)));
+    } catch (e) {
+      items.forEach((it) => it.reject(e));
+    }
+  }
+
+  // 読み取った結果をこの端末に覚えておき、次に開いたときすぐ表示できるようにする
+  const CACHE_KEY = 'shiftapp:cache:';
+  function remember(key, promise) {
+    return promise.then((data) => {
+      try {
+        localStorage.setItem(CACHE_KEY + key, JSON.stringify(data));
+      } catch (e) {
+        // 覚えられなくても動作には影響しない
+      }
+      return data;
+    });
+  }
+  function peek(key) {
+    try {
+      const text = localStorage.getItem(CACHE_KEY + key);
+      return text === null ? undefined : JSON.parse(text);
+    } catch (e) {
+      return undefined;
+    }
+  }
+
   const remote = {
     login: () => call('login', {}),
-    getSubmission: (month, name) => call('getSubmission', { month, name }),
-    saveSubmission: (sub) => call('saveSubmission', { submission: sub }),
+    getSubmission: (month, name) => remember('sub:' + month + ':' + name, call('getSubmission', { month, name })),
+    saveSubmission: (sub) =>
+      remember('sub:' + sub.month + ':' + sub.name, call('saveSubmission', { submission: sub })),
     listSubmissions: (month) => call('listSubmissions', { month }),
-    getSchedule: (month) => call('getSchedule', { month }),
+    getSchedule: (month) => remember('schedule:' + month, call('getSchedule', { month })),
     saveSchedule: (schedule) => call('saveSchedule', { schedule }),
   };
 
@@ -75,5 +134,8 @@ const Api = (() => {
   return {
     ...impl,
     isLocal: !CONFIG.API_URL,
+    // 前回読み取った結果(なければ undefined)。お試しモードでは使わない
+    peekSubmission: (month, name) => (CONFIG.API_URL ? peek('sub:' + month + ':' + name) : undefined),
+    peekSchedule: (month) => (CONFIG.API_URL ? peek('schedule:' + month) : undefined),
   };
 })();
