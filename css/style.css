@@ -388,7 +388,7 @@ body.view { padding-bottom: 32px; }
 .export-row.copied .sub-btn { color: var(--muted); }
 body.admin .toast { bottom: 24px; }
 
-/* ---------- 合言葉の入口 ---------- */
+/* ---------- 入口(読み込み失敗・管理パスワード) ---------- */
 .gate {
   position: fixed;
   inset: 0;
@@ -408,6 +408,16 @@ body.admin .toast { bottom: 24px; }
   padding: 24px 20px;
 }
 .gate-box h2 { margin: 0 0 16px; font-size: 20px; text-align: center; color: var(--blue); }
+.gate-box p { margin: 0 0 12px; font-size: 14px; color: var(--muted); }
+.gate-input {
+  width: 100%;
+  font-size: 16px; /* iPhoneで勝手に拡大されない大きさ */
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.gate-input:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+.gate-box .primary-btn { width: 100%; }
 .gate-error { min-height: 1.6em; margin: 8px 0; font-size: 14px; color: #b3400f; }
 
 /* ---------- 読み込み中 ---------- */

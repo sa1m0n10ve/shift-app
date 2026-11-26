@@ -73,6 +73,12 @@
       state.subs = subs;
       state.schedule = schedule || { month: monthKey(), assign: {}, closed: [], published: false };
     } catch (e) {
+      if (e.message === 'パスワードが違います') {
+        // パスワードが変わった:覚えていたものを消して、入力し直してもらう
+        Api.setAdminPassword('');
+        location.reload();
+        return;
+      }
       state.subs = [];
       state.schedule = { month: monthKey(), assign: {}, closed: [], published: false };
       alert('読み込みに失敗しました:' + e.message);
@@ -488,5 +494,50 @@
     load();
   }
 
-  Gate.enter().then(init);
+  // ---------- 管理パスワード ----------
+  // 一度正しく入れたら、この端末が覚えておく(次からは聞かない)
+  function askAdmin() {
+    if (Api.isLocal || Api.adminPassword()) return Promise.resolve();
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'gate';
+      overlay.innerHTML =
+        '<form class="gate-box"><h2>管理パスワード</h2>' +
+        '<p>シフトを作成する人だけが使う画面です。</p>' +
+        '<input class="gate-input" type="password" autocomplete="current-password" aria-label="管理パスワード" required>' +
+        '<p class="gate-error" role="alert"></p>' +
+        '<button class="primary-btn" type="submit">開く</button></form>';
+      const form = overlay.querySelector('form');
+      const input = overlay.querySelector('input');
+      const error = overlay.querySelector('.gate-error');
+      const button = overlay.querySelector('button');
+      form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const pw = input.value;
+        if (!pw) return;
+        button.disabled = true;
+        button.textContent = '確認中…';
+        error.textContent = '';
+        try {
+          await Api.checkAdmin(pw);
+        } catch (e) {
+          // 「不明な操作です」は、パスワード確認を入れる前の古いスクリプト(そのまま通す)
+          if (e.message !== '不明な操作です') {
+            error.textContent = e.message;
+            button.disabled = false;
+            button.textContent = '開く';
+            input.select();
+            return;
+          }
+        }
+        Api.setAdminPassword(pw);
+        overlay.remove();
+        resolve();
+      });
+      document.body.appendChild(overlay);
+      input.focus();
+    });
+  }
+
+  Gate.enter().then(askAdmin).then(init);
 })();

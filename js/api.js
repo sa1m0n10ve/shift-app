@@ -34,6 +34,9 @@ const Api = (() => {
     async getSchedule(month) {
       return read(SCHEDULE_KEY)[month] || null;
     },
+    async checkAdmin() {
+      return { ok: true };
+    },
     async saveSchedule(schedule) {
       const all = read(SCHEDULE_KEY);
       const saved = { ...schedule, updatedAt: new Date().toISOString() };
@@ -120,20 +123,40 @@ const Api = (() => {
     }
   }
 
+  // 管理画面のパスワード(一度入れたら、この端末が覚えておく)
+  const ADMIN_KEY = 'shiftapp:adminpw';
+  function adminPassword() {
+    try {
+      return localStorage.getItem(ADMIN_KEY) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   const remote = {
     login: () => call('login', {}),
     getSubmission: (month, name) => remember('sub:' + month + ':' + name, call('getSubmission', { month, name })),
     saveSubmission: (sub) =>
       remember('sub:' + sub.month + ':' + sub.name, call('saveSubmission', { submission: sub })),
-    listSubmissions: (month) => call('listSubmissions', { month }),
+    listSubmissions: (month) => call('listSubmissions', { month, password: adminPassword() }),
     getSchedule: (month) => remember('schedule:' + month, call('getSchedule', { month })),
-    saveSchedule: (schedule) => call('saveSchedule', { schedule }),
+    saveSchedule: (schedule) => call('saveSchedule', { schedule, password: adminPassword() }),
+    checkAdmin: (password) => call('checkAdmin', { password }),
   };
 
   const impl = CONFIG.API_URL ? remote : local;
   return {
     ...impl,
     isLocal: !CONFIG.API_URL,
+    adminPassword,
+    setAdminPassword: (pw) => {
+      try {
+        if (pw) localStorage.setItem(ADMIN_KEY, pw);
+        else localStorage.removeItem(ADMIN_KEY);
+      } catch (e) {
+        // 覚えられない端末では、開くたびに入力してもらう
+      }
+    },
     // 前回読み取った結果(なければ undefined)。お試しモードでは使わない
     peekSubmission: (month, name) => (CONFIG.API_URL ? peek('sub:' + month + ':' + name) : undefined),
     peekSchedule: (month) => (CONFIG.API_URL ? peek('schedule:' + month) : undefined),

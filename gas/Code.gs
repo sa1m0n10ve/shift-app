@@ -5,7 +5,8 @@
  *  1. スプレッドシートの「拡張機能 → Apps Script」にこのファイルの中身を貼り付ける
  *  2. 関数「setup」を1回実行する(シートが3枚できる)
  *  3. 「スタッフ」シートに名前を入れる
- *  4. 「デプロイ → 新しいデプロイ → ウェブアプリ」で公開し、URL を js/config.js の API_URL に貼る
+ *  4. 「プロジェクトの設定 → スクリプト プロパティ」に ADMIN_PASSWORD(管理画面のパスワード)を追加する
+ *  5. 「デプロイ → 新しいデプロイ → ウェブアプリ」で公開し、URL を js/config.js の API_URL に貼る
  */
 
 var SHEET = {
@@ -56,7 +57,8 @@ function doGet() {
 
 function handle_(req) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  // リンクを知っている人は全員、すべての操作ができる(合言葉・パスワードなし)
+  // 提出と確定シフトの閲覧はリンクだけで使える。
+  // 全員の提出内容の読み出しとシフトの保存は、管理パスワードが必要(requireAdmin_)
   switch (req.action) {
     case 'batch':
       // 同時に来た問い合わせをまとめて処理する(1回の通信で済ませるため)
@@ -80,22 +82,40 @@ function handle_(req) {
         return saveSubmission_(ss, req.submission);
       });
 
+    case 'checkAdmin':
+      requireAdmin_(req);
+      return { ok: true };
+
     case 'listSubmissions':
+      requireAdmin_(req);
       return listSubmissions_(ss, checkMonth_(req.month));
 
     case 'getSchedule':
       return getSchedule_(ss, checkMonth_(req.month));
 
     case 'saveSchedule':
+      requireAdmin_(req);
       return withLock_(function () {
         return saveSchedule_(ss, req.schedule);
       });
 
     case 'debug':
+      requireAdmin_(req);
       return debug_(ss);
 
     default:
       throw new Error('不明な操作です');
+  }
+}
+
+// 管理パスワードの確認。パスワードはコードに書かず、
+// Apps Script の「プロジェクトの設定 → スクリプト プロパティ」に ADMIN_PASSWORD として入れておく
+function requireAdmin_(req) {
+  var password = PropertiesService.getScriptProperties().getProperty('ADMIN_PASSWORD');
+  if (!password) throw new Error('管理パスワードが設定されていません(スクリプト プロパティ ADMIN_PASSWORD)');
+  if (String(req.password || '') !== password) {
+    Utilities.sleep(1000); // 総当たりで試されにくくする
+    throw new Error('パスワードが違います');
   }
 }
 
